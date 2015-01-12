@@ -21,9 +21,8 @@ public class CreateDwcA {
                              "TAXON_RANK.csv"
         ]
 
-
         if(args.length != 2){
-            println ("Supply a base directory containing UK species inventory export files, adnm an ouytput directory. e.g. /data/uk  /data/uk/dwca")
+            println ("Supply a base directory containing UK species inventory export files, and an output directory. e.g. /data/uk  /data/uk/dwca")
             println ("Required files include: \n\n\t" + requiredFiles.join("\n\t"))
             return
         }
@@ -203,13 +202,14 @@ public class CreateDwcA {
         }
 
         def datasetWriter = new CSVWriter(new FileWriter(new File("/data/uk/dwca/dataset.csv")))
+        datasetWriter.writeNext(["datasetID", "name", "dataProviderID", "dataProvider", "description"] as String[])
 
         //output attribution
         taxonListVersionKeys.each {
             //get the dataset details
             def taxonListKey = versionListMap.get(it)
             def listDetails = taxonListMap.get(taxonListKey)
-            String[] dataset = [it, listDetails['list'], listDetails['authority'], listDetails['description']]
+            String[] dataset = [it, listDetails['list'], "", listDetails['authority'], listDetails['description']]
             datasetWriter.writeNext(dataset)
         }
 
@@ -224,6 +224,8 @@ public class CreateDwcA {
 
         speciesProfile.flush()
         speciesProfile.close()
+
+        println "Archive created."
     }
 
     static def taxonVersionLookup(baseDir){
