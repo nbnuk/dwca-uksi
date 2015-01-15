@@ -11,14 +11,17 @@ public class CreateDwcA {
 
     public static void main(String[] args){
 
-        def requiredFiles = ["TAXON_LIST_VERSION.csv",
-                             "TAXON_LIST.csv",
-                             "ORGANISM_MASTER.csv",
-                             "NAMESERVER.csv",
-                             "TAXON_VERSION.csv",
-                             "TAXON.csv",
-                             "TAXON_LIST_ITEM.csv",
-                             "TAXON_RANK.csv"
+        def requiredFiles = [
+                "TAXON_LIST_VERSION.csv",
+                 "TAXON_LIST.csv",
+                 "ORGANISM_MASTER.csv",
+                 "OUTPUT_GROUP_MAP.csv",
+                 "NAMESERVER.csv",
+                 "TAXON_VERSION.csv",
+                 "TAXON.csv",
+                 "TAXON_LIST_ITEM.csv",
+                 "TAXON_RANK.csv",
+                 "TAXON_GROUP_NAME.csv"
         ]
 
         if(args.length != 2){
@@ -39,7 +42,7 @@ public class CreateDwcA {
             }
 
             if(!new File(args[1]).exists()){
-                println("Output directory doesnt exist " + args[1])
+                println("Output directory does not exist " + args[1])
                 FileUtils.forceMkdir(new File(args[1]))
             }
 
@@ -50,6 +53,35 @@ public class CreateDwcA {
 
         def baseDir = args[0] + File.separatorChar
 
+        //read the taxon list version keys into map
+        def groupIDMap = {
+
+            def reader = new CSVReader(new FileReader(baseDir + "TAXON_GROUP_NAME.csv"))
+            reader.readNext()  //ignore header
+            def map = [:]
+            def line = null
+            while ((line = reader.readNext()) != null) {
+                def key = line[0]
+                def name = line[1]
+                map.put(key, name)
+            }
+            map
+        }.call()
+
+        def taxonGroupMap = {
+
+            def reader = new CSVReader(new FileReader(baseDir + "OUTPUT_GROUP_MAP.csv"))
+            def headers = reader.readNext()  //ignore header
+            def map = [:]
+            def line = null
+            while ((line = reader.readNext()) != null) {
+                def groupKey = line[1]
+                def groupName = groupIDMap.get(groupKey)
+                def tvKey = line[2]
+                map.put(tvKey, groupName)
+            }
+            map
+        }.call()
 
         //read the taxon list version keys into map
         def versionListMap = {
@@ -108,7 +140,7 @@ public class CreateDwcA {
         def orgMasterReader = new CSVReader(new FileReader(baseDir + "ORGANISM_MASTER.csv"))
 
         def taxaWriter = new CSVWriter(new FileWriter(new File("/data/uk/dwca/taxa.csv")))
-        taxaWriter.writeNext(["taxonID", "parentNameUsageID", "acceptedNameUsageID", "datasetID", "scientificName", "scientificNameAuthorship", "taxonRank", "taxonConceptID", "taxonomicStatus", "establishmentMeans"] as String[])
+        taxaWriter.writeNext(["taxonID", "parentNameUsageID", "acceptedNameUsageID", "datasetID", "scientificName", "scientificNameAuthorship", "taxonRank", "taxonConceptID", "taxonomicStatus", "establishmentMeans", "taxonGroup"] as String[])
 
         def commonNameWriter = new CSVWriter(new FileWriter(new File("/data/uk/dwca/vernacular.csv")))
         commonNameWriter.writeNext(["taxonID", "nameID", "datasetID", "vernacularName", "language"] as String[])
@@ -150,9 +182,10 @@ public class CreateDwcA {
                     def scientificNameAuthorship = nameLookup["scientificNameAuthorship"]
                     def taxonRank = taxonListItem["taxonRank"]
                     def taxonomicStatus = "accepted"
+                    def taxonGroup = taxonGroupMap.get(taxonID)
 
                     // taxaWriter
-                    String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus, establishmentMeans]
+                    String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus, establishmentMeans, taxonGroup]
                     taxaWriter.writeNext(taxon)
 
                     if(marine){
