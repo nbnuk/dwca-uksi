@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archive xmlns="http://rs.tdwg.org/dwc/text/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" metadata="description.xml" xsi:schemaLocation="http://rs.tdwg.org/dwc/text/ http://rs.tdwg.org/dwc/text/tdwg_dwc_text.xsd">
+   <core ignoreHeaderLines="1" fieldsTerminatedBy="," fieldsEnclosedBy="&quot;" rowType="http://rs.tdwg.org/dwc/terms/Taxon">
+      <files>
+         <location>taxa.csv</location>
+      </files>
+      <id index="0" />
+      <field index="0" term="http://rs.tdwg.org/dwc/terms/taxonID" />
+      <field index="1" term="http://rs.tdwg.org/dwc/terms/parentNameUsageID" />
+      <field index="2" term="http://rs.tdwg.org/dwc/terms/acceptedNameUsageID" />
+      <field index="3" term="http://rs.tdwg.org/dwc/terms/datasetID" />
+      <field index="4" term="http://rs.tdwg.org/dwc/terms/scientificName" />
+      <field index="5" term="http://rs.tdwg.org/dwc/terms/scientificNameAuthorship" />
+      <field index="6" term="http://rs.tdwg.org/dwc/terms/taxonRank" />
+      <field index="7" term="http://rs.tdwg.org/dwc/terms/taxonConceptID" />
+      <field index="8" term="http://rs.tdwg.org/dwc/terms/taxonomicStatus" />
+      <field index="9" term="http://rs.tdwg.org/dwc/terms/establishmentMeans" />
+      <field index="10" term="http://rs.tdwg.org/dwc/terms/taxonGroup" />
+   </core>
+   <extension ignoreHeaderLines="1" fieldsTerminatedBy="," fieldsEnclosedBy="&quot;" rowType="http://rs.tdwg.org/dwc/terms/Taxon">
+      <files>
+         <location>commonName.csv</location>
+      </files>
+      <coreid index="1" />
+      <field index="0" term="http://rs.tdwg.org/dwc/terms/taxonID" />
+      <field index="1" term="http://rs.tdwg.org/dwc/terms/nameID" />
+      <field index="2" term="http://rs.tdwg.org/dwc/terms/datasetID" />
+      <field index="3" term="http://rs.tdwg.org/dwc/terms/vernacularName" />
+      <field index="4" term="http://rs.tdwg.org/dwc/terms/language" />
+   </extension>
+   <extension ignoreHeaderLines="1" fieldsTerminatedBy="," fieldsEnclosedBy="&quot;" rowType="http://rs.tdwg.org/dwc/terms/Taxon">
+      <files>
+         <location>dataset.csv</location>
+      </files>
+      <coreid index="0" />
+      <field index="0" term="http://rs.tdwg.org/dwc/terms/datasetID" />
+      <field index="1" term="http://rs.tdwg.org/dwc/terms/datasetName" />
+      <field index="2" term="dataProviderID" />
+      <field index="3" term="dataProvider" />
+      <field index="4" term="description" />
+   </extension>      
+</archive>
