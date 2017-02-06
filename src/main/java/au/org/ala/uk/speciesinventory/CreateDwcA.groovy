@@ -143,7 +143,7 @@ public class CreateDwcA {
         taxaWriter.writeNext(["taxonID", "parentNameUsageID", "acceptedNameUsageID", "datasetID", "scientificName", "scientificNameAuthorship", "taxonRank", "taxonConceptID", "taxonomicStatus", "establishmentMeans", "taxonGroup"] as String[])
 
         def commonNameWriter = new CSVWriter(new FileWriter(new File("/data/uk/dwca/vernacular.csv")))
-        commonNameWriter.writeNext(["taxonID", "nameID", "datasetID", "vernacularName", "language"] as String[])
+        commonNameWriter.writeNext(["taxonID", "nameID", "datasetID", "vernacularName", "language", "status"] as String[])
 
         def speciesProfile = new CSVWriter(new FileWriter(new File("/data/uk/dwca/speciesProfile.csv")))
         speciesProfile.writeNext(["taxonID", "habitat"] as String[])
@@ -177,7 +177,7 @@ public class CreateDwcA {
                     def taxonID = line[2]           //TAXON_VERSION_KEY
                     def parentNameUsageID = organismTaxonVersionKeyMap.get(line[1]) //PARENT_TVK
                     def acceptedNameUsageID = ""    //blank if not a synonym
-                    def datasetID = taxonListVersionKey
+                    def datasetID = "" //taxonListVersionKey
                     def scientificName = nameLookup["scientificName"]
                     def scientificNameAuthorship = nameLookup["scientificNameAuthorship"]
                     def taxonRank = taxonListItem["taxonRank"]
@@ -207,7 +207,7 @@ public class CreateDwcA {
         def csvReader = new CSVReader(new FileReader(baseDir + "NAMESERVER.csv"))
         csvReader.readNext()  //ignore header
 
-        def nsline = null
+        def nsline
         while((nsline = csvReader.readNext()) != null){
 
             def taxonVersionKey = nsline[1]
@@ -223,13 +223,35 @@ public class CreateDwcA {
             def scientificName = nameLookup["scientificName"]
             def scientificNameAuthorship = nameLookup["scientificNameAuthorship"]
             def taxonRank = taxonListItem["taxonRank"]
-            def taxonomicStatus = "accepted"
+            def taxonomicStatus = "synonym"
+            def language = nameLookup["lang"]
+
+            def isRecommended = nsline[3] == "R"   //is recommended
+            def isWellformed = nsline[2] == "W" //is well formed
+
+            //get the well formed-ness, recommended-ness of the name
+
 
             if(taxonID != acceptedNameUsageID && !nameLookup["isVernacular"]){
                 String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus]
                 taxaWriter.writeNext(taxon)
             } else if(taxonID != acceptedNameUsageID && nameLookup["isVernacular"]) {
-                String[] common = [acceptedNameUsageID, taxonID, datasetID, scientificName, "English"]
+                //set a priority based on language
+                def status = "standard"
+                if(language == "en"){
+                    if(isRecommended && isWellformed){
+                        status = "preferred"
+                    } else if(isRecommended){
+                        status = "recommended"
+                    } else if(isWellformed){
+                        status = "well formed"
+                    } else {
+                        status = "not well formed"
+                    }
+                } else {
+                    status = "local"
+                }
+                String[] common = [acceptedNameUsageID, taxonID, datasetID, scientificName, language, status]
                 commonNameWriter.writeNext(common)
             }
         }
@@ -291,7 +313,10 @@ public class CreateDwcA {
             def name = line[2]
             def author = line[3]
             def nameTypeKey = line[8]
-            scientificNames.put(taxonKey, [scientificName: name, scientificNameAuthorship: author, isVernacular: nameTypeKey == "NBNSYS0000000002"])
+            def language = line[7]
+            def wellformed = line[7]
+
+            scientificNames.put(taxonKey, [scientificName: name, scientificNameAuthorship: author, isVernacular: nameTypeKey == "NBNSYS0000000002", lang:language])
         }
         csvReader.close()
         scientificNames
