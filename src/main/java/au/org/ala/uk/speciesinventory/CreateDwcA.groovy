@@ -125,10 +125,10 @@ public class CreateDwcA {
         def taxonListItemLookup = CreateDwcA.taxonListItemLookup(baseDir)
         def taxonVersionLookup = CreateDwcA.taxonVersionLookup(baseDir)
         def scientificNameLookup = CreateDwcA.readScientificNames(baseDir)
+        def nameserverLookup = CreateDwcA.readNameServer(baseDir)
+        def recommendedKeys = nameserverLookup.values().toSet()
 
         //required column headers - taxonID, datasetID, acceptedNameUsageID, parentNameUsageID, taxonomicStatus, taxonRank, scientificName, scientificNameAuthorship
-
-        //includes synonyms.....
 
         //iterate over ORGANISM MASTER
         // output taxonConceptID=ORGANISM_KEY, taxonID=TAXON_VERSION_KEY, parentNameUsageID=PARENT_TVK
@@ -210,13 +210,24 @@ public class CreateDwcA {
         def nsline
         while((nsline = csvReader.readNext()) != null){
 
-            def taxonVersionKey = nsline[1]
+            def taxonVersionKey = nsline[1]      //the INPUT TAXON VERSION KEY
             def taxonListItem = taxonListItemLookup.get(taxonVersionKey)
             def taxonKey = taxonVersionLookup.get(taxonVersionKey)
             def nameLookup = scientificNameLookup.get(taxonKey)
-
             def acceptedNameUsageID = nsline[5]  //RECOMMENDED_KEY
-            def taxonID = taxonVersionKey       //TAXON_VERSION_KEY
+
+            if(taxonVersionKey != acceptedNameUsageID && taxonVersionLookup.get(acceptedNameUsageID)){
+                def taxonVersionAcceptedLookup = taxonVersionLookup.get(acceptedNameUsageID)
+                def taxonLookup = scientificNameLookup.get(taxonVersionAcceptedLookup)
+                if(taxonLookup && taxonLookup.normalisedKey){
+                    def newAcceptedNameUsageID = nameserverLookup.get(taxonLookup.normalisedKey)
+                    if(recommendedKeys.contains(newAcceptedNameUsageID)){
+                        acceptedNameUsageID = newAcceptedNameUsageID
+                    }
+                }
+            }
+
+            def taxonID = taxonVersionKey        //TAXON_VERSION_KEY
             def taxonConceptID = ""
             def parentNameUsageID = ""
             def datasetID = taxonListItem["datasetID"]
@@ -230,8 +241,6 @@ public class CreateDwcA {
             def isWellformed = nsline[2] == "W" //is well formed
 
             //get the well formed-ness, recommended-ness of the name
-
-
             if(taxonID != acceptedNameUsageID && !nameLookup["isVernacular"]){
                 String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus]
                 taxaWriter.writeNext(taxon)
@@ -310,17 +319,38 @@ public class CreateDwcA {
         def line = null
         while((line =  csvReader.readNext()) != null){
             def taxonKey = line[0]
+            def normalisedKey = line[1]
             def name = line[2]
             def author = line[3]
             def nameTypeKey = line[8]
             def language = line[7]
             def wellformed = line[7]
 
-            scientificNames.put(taxonKey, [scientificName: name, scientificNameAuthorship: author, isVernacular: nameTypeKey == "NBNSYS0000000002", lang:language])
+            scientificNames.put(taxonKey, [normalisedKey: normalisedKey, scientificName: name, scientificNameAuthorship: author, isVernacular: nameTypeKey == "NBNSYS0000000002", lang:language, wellformed: wellformed])
         }
         csvReader.close()
         scientificNames
     }
+
+    /**
+     * Returns a taxonVersionKey -> name, authorship map
+     * @return
+     */
+    static def readNameServer(baseDir){
+
+        def csvReader = new CSVReader(new FileReader(baseDir + "NAMESERVER.csv"))
+        csvReader.readNext()  //ignore header
+        def recommendedKeyLookup = [:]
+        def line = null
+        while((line =  csvReader.readNext()) != null){
+            def taxonKey = line[1]
+            def recommendedKey = line[5]
+            recommendedKeyLookup.put(taxonKey, recommendedKey)
+        }
+        csvReader.close()
+        recommendedKeyLookup
+    }
+
 
     static def taxonListItemLookup(baseDir){
 
