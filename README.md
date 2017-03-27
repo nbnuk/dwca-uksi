@@ -1,2 +1,2 @@
-# dwca-bie
-Scripts for creating DWCA for loading into BIE replacement
+# dwca-uksi
+Scripts for creating Darwin Core Archive from data from the UK Species Inventory for loading into the Atlas' search indexes.
