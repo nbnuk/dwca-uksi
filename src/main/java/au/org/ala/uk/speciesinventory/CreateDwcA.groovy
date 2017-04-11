@@ -110,7 +110,7 @@ public class CreateDwcA {
             taxonListMap
         }.call()
 
-        //organism - taxon version key map
+        //organism key -> taxon version key map
         def organismTaxonVersionKeyMap = {
             def map = [:]
             def orgMasterReader = new CSVReader(new FileReader(baseDir + "ORGANISM_MASTER.csv"))
@@ -122,7 +122,7 @@ public class CreateDwcA {
             map
         }.call()
 
-        def taxonListItemLookup = CreateDwcA.taxonListItemLookup(baseDir)
+        def taxonVersionRankLookup = CreateDwcA.taxonVersionRankLookup(baseDir)
         def taxonVersionLookup = CreateDwcA.taxonVersionLookup(baseDir)
         def scientificNameLookup = CreateDwcA.readScientificNames(baseDir)
         def nameserverLookup = CreateDwcA.readNameServer(baseDir)
@@ -151,26 +151,31 @@ public class CreateDwcA {
         def headers = orgMasterReader.readNext()  //ignore header
         def line = null
 
-        def taxonListVersionKeys = [] as HashSet
+        def taxonVersionKeys = [] as HashSet
 
         while((line = orgMasterReader.readNext()) != null){
 
             def freshWaterTerrestrial = line[8] == "Y"
             def marine = line[7] == "Y"
             def establishmentMeans = line[10] == "Y" ? "introduced" : "native"
-            def notFitForWeb = line[9]
             def redundant = line[11]
-            def ignore = notFitForWeb == "Y" || redundant == "Y"
+            def deletedDate = line[18] //straight duplicate
+
+            def ignore = deletedDate || redundant == "Y"
 
             if(!ignore){
 
                 def taxonVersionKey = line[2]
-                def taxonListItem = taxonListItemLookup.get(taxonVersionKey)
+                def taxonVersionRank = taxonVersionRankLookup.get(taxonVersionKey)
+                if(!taxonVersionRank){
+                    println("Unable to get rank for version key: " + taxonVersionKey)
+                }
+
+
                 def taxonKey = taxonVersionLookup.get(taxonVersionKey)
                 def nameLookup = scientificNameLookup.get(taxonKey)
-                def taxonListVersionKey = taxonListItem["taxonListVersionKey"]
 
-                taxonListVersionKeys <<  taxonListVersionKey
+                taxonVersionKeys <<  taxonVersionKey
 
                 if(nameLookup) {
                     def taxonConceptID = line[0]    //ORGANISM_KEY
@@ -180,7 +185,7 @@ public class CreateDwcA {
                     def datasetID = "" //taxonListVersionKey
                     def scientificName = nameLookup["scientificName"]
                     def scientificNameAuthorship = nameLookup["scientificNameAuthorship"]
-                    def taxonRank = taxonListItem["taxonRank"]
+                    def taxonRank = taxonVersionRank["taxonRank"]
                     def taxonomicStatus = "accepted"
                     def taxonGroup = taxonGroupMap.get(taxonID)
 
@@ -208,60 +213,56 @@ public class CreateDwcA {
         csvReader.readNext()  //ignore header
 
         def nsline
+
         while((nsline = csvReader.readNext()) != null){
 
-            def taxonVersionKey = nsline[1]      //the INPUT TAXON VERSION KEY
-            def taxonListItem = taxonListItemLookup.get(taxonVersionKey)
-            def taxonKey = taxonVersionLookup.get(taxonVersionKey)
-            def nameLookup = scientificNameLookup.get(taxonKey)
-            def acceptedNameUsageID = nsline[5]  //RECOMMENDED_KEY
+            def deletedDate = nsline[10]
+            def redundant = nsline[11]
 
-            if(taxonVersionKey != acceptedNameUsageID && taxonVersionLookup.get(acceptedNameUsageID)){
-                def taxonVersionAcceptedLookup = taxonVersionLookup.get(acceptedNameUsageID)
-                def taxonLookup = scientificNameLookup.get(taxonVersionAcceptedLookup)
-                if(taxonLookup && taxonLookup.normalisedKey){
-                    def newAcceptedNameUsageID = nameserverLookup.get(taxonLookup.normalisedKey)
-                    if(recommendedKeys.contains(newAcceptedNameUsageID)){
-                        acceptedNameUsageID = newAcceptedNameUsageID
-                    }
-                }
-            }
+            if(!deletedDate) {
 
-            def taxonID = taxonVersionKey        //TAXON_VERSION_KEY
-            def taxonConceptID = ""
-            def parentNameUsageID = ""
-            def datasetID = taxonListItem["datasetID"]
-            def scientificName = nameLookup["scientificName"]
-            def scientificNameAuthorship = nameLookup["scientificNameAuthorship"]
-            def taxonRank = taxonListItem["taxonRank"]
-            def taxonomicStatus = "synonym"
-            def language = nameLookup["lang"]
+                def taxonVersionKey = nsline[1]      //the INPUT TAXON VERSION KEY
+                def taxonVersionRank = taxonVersionRankLookup.get(taxonVersionKey)
+                def taxonKey = taxonVersionLookup.get(taxonVersionKey)
+                def nameLookup = scientificNameLookup.get(taxonKey)
+                def acceptedNameUsageID = nsline[5]  //RECOMMENDED_KEY
 
-            def isRecommended = nsline[3] == "R"   //is recommended
-            def isWellformed = nsline[2] == "W" //is well formed
+                def taxonID = taxonVersionKey        //TAXON_VERSION_KEY
+                def taxonConceptID = ""
+                def parentNameUsageID = ""
+                def datasetID = ""
+                def scientificName = nameLookup["scientificName"]
+                def scientificNameAuthorship = nameLookup["scientificNameAuthorship"]
+                def taxonRank = taxonVersionRank["taxonRank"]
+                def taxonomicStatus = "synonym"
+                def language = nameLookup["lang"]
 
-            //get the well formed-ness, recommended-ness of the name
-            if(taxonID != acceptedNameUsageID && !nameLookup["isVernacular"]){
-                String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus]
-                taxaWriter.writeNext(taxon)
-            } else if(taxonID != acceptedNameUsageID && nameLookup["isVernacular"]) {
-                //set a priority based on language
-                def status = "standard"
-                if(language == "en"){
-                    if(isRecommended && isWellformed){
-                        status = "preferred"
-                    } else if(isRecommended){
-                        status = "recommended"
-                    } else if(isWellformed){
-                        status = "well formed"
+                def isRecommended = nsline[3] == "R"   //is recommended
+                def isWellformed = nsline[2] == "W" //is well formed
+
+                //get the well formed-ness, recommended-ness of the name
+                if (taxonID != acceptedNameUsageID && !nameLookup["isVernacular"]) {
+                    String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus]
+                    taxaWriter.writeNext(taxon)
+                } else if (taxonID != acceptedNameUsageID && nameLookup["isVernacular"]) {
+                    //set a priority based on language
+                    def status = "standard"
+                    if (language == "en") {
+                        if (isRecommended && isWellformed) {
+                            status = "preferred"
+                        } else if (isRecommended) {
+                            status = "recommended"
+                        } else if (isWellformed) {
+                            status = "well formed"
+                        } else {
+                            status = "not well formed"
+                        }
                     } else {
-                        status = "not well formed"
+                        status = "local"
                     }
-                } else {
-                    status = "local"
+                    String[] common = [acceptedNameUsageID, taxonID, datasetID, scientificName, language, status]
+                    commonNameWriter.writeNext(common)
                 }
-                String[] common = [acceptedNameUsageID, taxonID, datasetID, scientificName, language, status]
-                commonNameWriter.writeNext(common)
             }
         }
 
@@ -269,13 +270,13 @@ public class CreateDwcA {
         datasetWriter.writeNext(["datasetID", "name", "dataProviderID", "dataProvider", "description"] as String[])
 
         //output attribution
-        taxonListVersionKeys.each {
-            //get the dataset details
-            def taxonListKey = versionListMap.get(it)
-            def listDetails = taxonListMap.get(taxonListKey)
-            String[] dataset = [it, listDetails['list'], "", listDetails['authority'], listDetails['description']]
-            datasetWriter.writeNext(dataset)
-        }
+//        taxonVersionKeys.each {
+//            //get the dataset details
+//            def taxonListKey = versionListMap.get(it)
+//            def listDetails = taxonListMap.get(taxonListKey)
+//            String[] dataset = [it, listDetails['list'], "", listDetails['authority'], listDetails['description']]
+//            datasetWriter.writeNext(dataset)
+//        }
 
         datasetWriter.flush()
         datasetWriter.close()
@@ -352,7 +353,7 @@ public class CreateDwcA {
     }
 
 
-    static def taxonListItemLookup(baseDir){
+    static def taxonVersionRankLookup(baseDir){
 
         //get the taxon ranks
         def taxonRankLookup = {
@@ -369,23 +370,19 @@ public class CreateDwcA {
         println(taxonRankLookup)
 
         println("Loading taxon list")
-        def csvReader = new CSVReader(new FileReader(baseDir + "TAXON_LIST_ITEM.csv"))
+        def csvReader = new CSVReader(new FileReader(baseDir + "TAXON_VERSION.csv"))
         def headers = csvReader.readNext()  //ignore header
 
         def line = null
-        def listLookup = [:]
+        def taxonVersionKeyRankLookup = [:]
 
         while((line =  csvReader.readNext()) != null){
-
-            def taxonListVersionKey = line[2]
-            def taxonRankKey = line[8]
-            def preferredNameID = line[4]
-
-            listLookup.put(line[1], [taxonListVersionKey: taxonListVersionKey, taxonRank: taxonRankLookup.get(taxonRankKey), preferredNameID: preferredNameID])
+            def taxonVersionKey = line[0]
+            def taxonRankKey = line[12]
+            taxonVersionKeyRankLookup.put(taxonVersionKey, [taxonVersionKey: taxonVersionKey, taxonRank: taxonRankLookup.get(taxonRankKey)])
         }
 
-        println("List items: " + listLookup.size())
-
-        listLookup
+        println("List items: " + taxonVersionKeyRankLookup.size())
+        taxonVersionKeyRankLookup
     }
 }
