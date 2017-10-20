@@ -15,7 +15,6 @@ public class CreateDwcA {
                 "TAXON_LIST_VERSION.csv",
                  "TAXON_LIST.csv",
                  "ORGANISM_MASTER.csv",
-                 "OUTPUT_GROUP_MAP.csv",
                  "NAMESERVER.csv",
                  "TAXON_VERSION.csv",
                  "TAXON.csv",
@@ -70,14 +69,14 @@ public class CreateDwcA {
 
         def taxonGroupMap = {
 
-            def reader = new CSVReader(new FileReader(baseDir + "OUTPUT_GROUP_MAP.csv"))
+            def reader = new CSVReader(new FileReader(baseDir + "TAXON_VERSION.csv"))
             def headers = reader.readNext()  //ignore header
             def map = [:]
             def line = null
             while ((line = reader.readNext()) != null) {
-                def groupKey = line[1]
+                def groupKey = line[11]
                 def groupName = groupIDMap.get(groupKey)
-                def tvKey = line[2]
+                def tvKey = line[0]
                 map.put(tvKey, groupName)
             }
             map
@@ -139,13 +138,13 @@ public class CreateDwcA {
         // ignore if VERNACULAR="Y", ONLY_IN_NOT_FIT_FOR_WEB="Y", REDUNDANT_FLAG="Y"
         def orgMasterReader = new CSVReader(new FileReader(baseDir + "ORGANISM_MASTER.csv"))
 
-        def taxaWriter = new CSVWriter(new FileWriter(new File("/data/uk/dwca/taxa.csv")))
+        def taxaWriter = new CSVWriter(new FileWriter(new File("data/uk/dwca/taxa.csv")))
         taxaWriter.writeNext(["taxonID", "parentNameUsageID", "acceptedNameUsageID", "datasetID", "scientificName", "scientificNameAuthorship", "taxonRank", "taxonConceptID", "taxonomicStatus", "establishmentMeans", "taxonGroup"] as String[])
 
-        def commonNameWriter = new CSVWriter(new FileWriter(new File("/data/uk/dwca/vernacular.csv")))
+        def commonNameWriter = new CSVWriter(new FileWriter(new File("data/uk/dwca/vernacular.csv")))
         commonNameWriter.writeNext(["taxonID", "nameID", "datasetID", "vernacularName", "language", "status"] as String[])
 
-        def speciesProfile = new CSVWriter(new FileWriter(new File("/data/uk/dwca/speciesProfile.csv")))
+        def speciesProfile = new CSVWriter(new FileWriter(new File("data/uk/dwca/speciesProfile.csv")))
         speciesProfile.writeNext(["taxonID", "habitat"] as String[])
 
         def headers = orgMasterReader.readNext()  //ignore header
@@ -157,9 +156,9 @@ public class CreateDwcA {
 
             def freshWaterTerrestrial = line[8] == "Y"
             def marine = line[7] == "Y"
-            def establishmentMeans = line[10] == "Y" ? "introduced" : "native"
-            def redundant = line[11]
-            def deletedDate = line[18] //straight duplicate
+            def establishmentMeans = line[11] == "Y" ? "introduced" : "native" // **** SR changed from 10
+            def redundant = line[10] // **** SR changed from 11
+            def deletedDate = line[19] //straight duplicate  // **** SR changed from 18
 
             def ignore = deletedDate || redundant == "Y"
 
@@ -187,7 +186,7 @@ public class CreateDwcA {
                     def scientificNameAuthorship = nameLookup["scientificNameAuthorship"]
                     def taxonRank = taxonVersionRank["taxonRank"]
                     def taxonomicStatus = "accepted"
-                    def taxonGroup = taxonGroupMap.get(taxonID)
+                    def taxonGroup = taxonGroupMap.get(taxonID) // this needs to be changed to get the
 
                     // taxaWriter
                     String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus, establishmentMeans, taxonGroup]
@@ -217,7 +216,7 @@ public class CreateDwcA {
         while((nsline = csvReader.readNext()) != null){
 
             def deletedDate = nsline[10]
-            def redundant = nsline[11]
+            //def redundant = nsline[11]
 
             if(!deletedDate) {
 
@@ -266,7 +265,7 @@ public class CreateDwcA {
             }
         }
 
-        def datasetWriter = new CSVWriter(new FileWriter(new File("/data/uk/dwca/dataset.csv")))
+        def datasetWriter = new CSVWriter(new FileWriter(new File("data/uk/dwca/dataset.csv")))
         datasetWriter.writeNext(["datasetID", "name", "dataProviderID", "dataProvider", "description"] as String[])
 
         //output attribution
