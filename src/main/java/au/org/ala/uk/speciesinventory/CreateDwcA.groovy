@@ -154,11 +154,12 @@ public class CreateDwcA {
 
         while((line = orgMasterReader.readNext()) != null){
 
-            def freshWaterTerrestrial = line[8] == "Y"
+            def terrestrial = line[8] == "Y"
             def marine = line[7] == "Y"
-            def establishmentMeans = line[11] == "Y" ? "introduced" : "native" // **** SR changed from 10
-            def redundant = line[10] // **** SR changed from 11
-            def deletedDate = line[19] //straight duplicate  // **** SR changed from 18
+            def freshwater = line[9] == "Y"
+            def establishmentMeans = line[11] == "Y" ? "introduced" : "native"
+            def redundant = line[10]
+            def deletedDate = line[19] //straight duplicate
 
             def ignore = deletedDate || redundant == "Y"
 
@@ -196,8 +197,12 @@ public class CreateDwcA {
                         speciesProfile.writeNext([taxonID, "marine"] as String[])
                     }
 
-                    if(freshWaterTerrestrial){
+                    if(terrestrial){
                         speciesProfile.writeNext([taxonID, "terrestrial"] as String[])
+                    }
+
+                    if(freshwater){
+                        speciesProfile.writeNext([taxonID, "freshwater"] as String[])
                     }
 
                 } else {
