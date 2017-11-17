@@ -23,6 +23,11 @@ public class CreateDwcA {
                  "TAXON_GROUP_NAME.csv"
         ]
 
+        def blackListCommonName =[
+                "Janapese Knotweed",
+                "Water Rat"
+        ]
+
         if(args.length != 2){
             println ("Supply a base directory containing UK species inventory export files, and an output directory. e.g. /data/uk  /data/uk/dwca")
             println ("Required files include: \n\n\t" + requiredFiles.join("\n\t"))
@@ -264,8 +269,10 @@ public class CreateDwcA {
                     } else {
                         status = "local"
                     }
-                    String[] common = [acceptedNameUsageID, taxonID, datasetID, scientificName, language, status]
-                    commonNameWriter.writeNext(common)
+                    if(!blackListCommonName.grep(scientificName)) {
+                        String[] common = [acceptedNameUsageID, taxonID, datasetID, scientificName, language, status]
+                        commonNameWriter.writeNext(common)
+                    }
                 }
             }
         }
