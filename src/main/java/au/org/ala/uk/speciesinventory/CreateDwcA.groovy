@@ -25,7 +25,8 @@ public class CreateDwcA {
 
         def blackListCommonName =[
                 "Janapese Knotweed",
-                "Water Rat"
+                "Water Rat",
+                "Common Glassowrt"
         ]
 
         if(args.length != 2){
