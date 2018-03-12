@@ -29,6 +29,8 @@ public class CreateDwcA {
                 "Common Glassowrt"
         ]
 
+        def nnssTaxonListVersionKey = "NHMSYS0021111266"
+
         if(args.length != 2){
             println ("Supply a base directory containing UK species inventory export files, and an output directory. e.g. /data/uk  /data/uk/dwca")
             println ("Required files include: \n\n\t" + requiredFiles.join("\n\t"))
@@ -127,11 +129,30 @@ public class CreateDwcA {
             map
         }.call()
 
+        //read the designation type keys into map (for NNSS)
+        def designationTypeMap = {
+
+            def reader = new CSVReader(new FileReader(baseDir + "TAXON_DESIGNATION_TYPE.csv"))
+            reader.readNext()  //ignore header
+            def map = [:]
+            def line = null
+            while ((line = reader.readNext()) != null) {
+                if (line[4] == 'NNSS') {
+                    def key = line[0]
+                    def name = line[2]
+                    map.put(key, name)
+                }
+            }
+            map
+        }.call()
+
         def taxonVersionRankLookup = CreateDwcA.taxonVersionRankLookup(baseDir)
         def taxonVersionLookup = CreateDwcA.taxonVersionLookup(baseDir)
         def scientificNameLookup = CreateDwcA.readScientificNames(baseDir)
         def nameserverLookup = CreateDwcA.readNameServer(baseDir)
         def recommendedKeys = nameserverLookup.values().toSet()
+        def nnssTaxonListItemLookup = CreateDwcA.readTaxonListItems(baseDir, nnssTaxonListVersionKey)
+        def taxonDesignationLookup = CreateDwcA.readTaxonDesignations(baseDir)
 
         //required column headers - taxonID, datasetID, acceptedNameUsageID, parentNameUsageID, taxonomicStatus, taxonRank, scientificName, scientificNameAuthorship
 
@@ -140,18 +161,14 @@ public class CreateDwcA {
         // retrieve scientificName=ITEM_NAME, scientificNameAuthorship=AUTHORITY  from TAXON.csv
         // retrieve taxonRank=TAXON_RANK_KEY, datasetID=TAXON_LIST_VERSION_KEY    from TAXON_LIST_ITEM.csv
 
-        // output MARINE_FLAG,TERRESTRIAL_FRESHWATER_FLAG,REDUNDANT_FLAG,NON_NATIVE_FLAG -> speciesProfile.txt
         // ignore if VERNACULAR="Y", ONLY_IN_NOT_FIT_FOR_WEB="Y", REDUNDANT_FLAG="Y"
         def orgMasterReader = new CSVReader(new FileReader(baseDir + "ORGANISM_MASTER.csv"))
 
         def taxaWriter = new CSVWriter(new FileWriter(new File("data/uk/dwca/taxa.csv")))
-        taxaWriter.writeNext(["taxonID", "parentNameUsageID", "acceptedNameUsageID", "datasetID", "scientificName", "scientificNameAuthorship", "taxonRank", "taxonConceptID", "taxonomicStatus", "establishmentMeans", "taxonGroup"] as String[])
+        taxaWriter.writeNext(["taxonID", "parentNameUsageID", "acceptedNameUsageID", "datasetID", "scientificName", "scientificNameAuthorship", "taxonRank", "taxonConceptID", "taxonomicStatus", "establishmentMeans", "taxonGroup", "establishmentStatus", "habitat"] as String[])
 
         def commonNameWriter = new CSVWriter(new FileWriter(new File("data/uk/dwca/vernacular.csv")))
         commonNameWriter.writeNext(["taxonID", "nameID", "datasetID", "vernacularName", "language", "status"] as String[])
-
-        def speciesProfile = new CSVWriter(new FileWriter(new File("data/uk/dwca/speciesProfile.csv")))
-        speciesProfile.writeNext(["taxonID", "habitat"] as String[])
 
         def headers = orgMasterReader.readNext()  //ignore header
         def line = null
@@ -163,7 +180,6 @@ public class CreateDwcA {
             def terrestrial = line[8] == "Y"
             def marine = line[7] == "Y"
             def freshwater = line[9] == "Y"
-            def establishmentMeans = line[11] == "Y" ? "introduced" : "native"
             def redundant = line[10]
             def deletedDate = line[19] //straight duplicate
 
@@ -181,6 +197,8 @@ public class CreateDwcA {
                 def taxonKey = taxonVersionLookup.get(taxonVersionKey)
                 def nameLookup = scientificNameLookup.get(taxonKey)
 
+                def nnssDesignationLookup = nnssTaxonListItemLookup.get(taxonVersionKey)
+
                 taxonVersionKeys <<  taxonVersionKey
 
                 if(nameLookup) {
@@ -194,22 +212,45 @@ public class CreateDwcA {
                     def taxonRank = taxonVersionRank["taxonRank"]
                     def taxonomicStatus = "accepted"
                     def taxonGroup = taxonGroupMap.get(taxonID) // this needs to be changed to get the
+                    def establishmentMeans = ""
+                    def establishmentStatus = ""
 
-                    // taxaWriter
-                    String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus, establishmentMeans, taxonGroup]
-                    taxaWriter.writeNext(taxon)
-
+                    if(nnssDesignationLookup){
+                        establishmentMeans = "Non-native"
+                        // get designation by taxon list item key
+                        def designation = taxonDesignationLookup.get(nnssDesignationLookup)
+                        if(designation) {
+                            establishmentStatus = designationTypeMap.get(designation)
+                        }
+                    }
+                    else{
+                        establishmentMeans = "Native"
+                    }
+                    def habitat = ""
                     if(marine){
-                        speciesProfile.writeNext([taxonID, "marine"] as String[])
+                        habitat = "marine"
                     }
 
                     if(terrestrial){
-                        speciesProfile.writeNext([taxonID, "terrestrial"] as String[])
+                        if(habitat !="") {
+                            habitat = habitat + "/terrestrial"
+                        }else{
+                            habitat = "terrestrial"
+                        }
                     }
 
                     if(freshwater){
-                        speciesProfile.writeNext([taxonID, "freshwater"] as String[])
+                        if(habitat !="") {
+                            habitat = habitat + "/freshwater"
+                        }else{
+                            habitat = "freshwater"
+                        }
                     }
+
+                    // taxaWriter
+                    String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus, establishmentMeans, taxonGroup, establishmentStatus, habitat]
+                    taxaWriter.writeNext(taxon)
+
 
                 } else {
                     println("name lookup fails for " + taxonVersionKey)
@@ -299,8 +340,6 @@ public class CreateDwcA {
         commonNameWriter.flush()
         commonNameWriter.close()
 
-        speciesProfile.flush()
-        speciesProfile.close()
 
         println "Archive created."
     }
@@ -397,4 +436,50 @@ public class CreateDwcA {
         println("List items: " + taxonVersionKeyRankLookup.size())
         taxonVersionKeyRankLookup
     }
+
+    /**
+     * Returns a taxonDesignationsTypes
+     * @return
+     */
+    static def readTaxonDesignations(baseDir){
+
+        def csvReader = new CSVReader(new FileReader(baseDir + "TAXON_DESIGNATION.csv"))
+        csvReader.readNext()  //ignore header
+        def taxonDesignationLookup = [:]
+        def line = null
+        while((line =  csvReader.readNext()) != null){
+            def taxonDesignationTypeKey = line[6]
+            def taxonListItemKey = line[7]
+            taxonDesignationLookup.put(taxonListItemKey, taxonDesignationTypeKey)
+        }
+        csvReader.close()
+        taxonDesignationLookup
+    }
+
+    /**
+     * Returns a taxonDesignationsTypes
+     * @return
+     */
+    static def readTaxonListItems(baseDir, taxonListVersionKey){
+
+        def csvReader = new CSVReader(new FileReader(baseDir + "TAXON_LIST_ITEM.csv"))
+        csvReader.readNext()  //ignore header
+        def taxonListItemLookup = [:]
+        def line = null
+        while((line =  csvReader.readNext()) != null){
+            if(line[2] == taxonListVersionKey) {
+                def deletedDate = line[15]
+                def versionTo = line[3]
+
+                if(!deletedDate & !versionTo) {
+                    def taxonVersionKey = line[1]
+                    def taxonListItemKey = line[0]
+                    taxonListItemLookup.put(taxonVersionKey, taxonListItemKey)
+                }
+            }
+        }
+        csvReader.close()
+        taxonListItemLookup
+    }
+
 }
