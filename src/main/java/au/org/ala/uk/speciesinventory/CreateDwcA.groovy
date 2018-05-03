@@ -170,6 +170,9 @@ public class CreateDwcA {
         def commonNameWriter = new CSVWriter(new FileWriter(new File("data/uk/dwca/vernacular.csv")))
         commonNameWriter.writeNext(["taxonID", "nameID", "datasetID", "vernacularName", "language", "status"] as String[])
 
+        def speciesProfile = new CSVWriter(new FileWriter(new File("data/uk/dwca/speciesProfile.csv")))
+        speciesProfile.writeNext(["taxonID", "habitat"] as String[])
+
         def headers = orgMasterReader.readNext()  //ignore header
         def line = null
 
@@ -228,10 +231,12 @@ public class CreateDwcA {
                     }
                     def habitat = ""
                     if(marine){
+                        speciesProfile.writeNext([taxonID, "marine"] as String[])
                         habitat = "marine"
                     }
 
                     if(terrestrial){
+                        speciesProfile.writeNext([taxonID, "terrestrial"] as String[])
                         if(habitat !="") {
                             habitat = habitat + "/terrestrial"
                         }else{
@@ -240,6 +245,7 @@ public class CreateDwcA {
                     }
 
                     if(freshwater){
+                        speciesProfile.writeNext([taxonID, "freshwater"] as String[])
                         if(habitat !="") {
                             habitat = habitat + "/freshwater"
                         }else{
@@ -339,6 +345,9 @@ public class CreateDwcA {
 
         commonNameWriter.flush()
         commonNameWriter.close()
+
+        speciesProfile.flush()
+        speciesProfile.close()
 
 
         println "Archive created."
