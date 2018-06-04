@@ -20,13 +20,27 @@ public class CreateDwcA {
                  "TAXON.csv",
                  "TAXON_LIST_ITEM.csv",
                  "TAXON_RANK.csv",
-                 "TAXON_GROUP_NAME.csv"
+                 "TAXON_GROUP_NAME.csv",
+                "NBNA_taxa_with_records.csv"
         ]
 
         def blackListCommonName =[
                 "Janapese Knotweed",
                 "Water Rat",
                 "Common Glassowrt"
+        ]
+
+        def redundantNonNativeWithRecords =[
+                "NBNSYS0000005185",
+                "NBNSYS0000007574",
+                "NBNSYS0200002222",
+                "NHMSYS0000465080",
+                "NHMSYS0000516295",
+                "NHMSYS0020784171",
+                "NHMSYS0020975275",
+                "NHMSYS0020975292",
+                "NHMSYS0020975294",
+                "NHMSYS0021126822"
         ]
 
         def nnssTaxonListVersionKey = "NHMSYS0021111266"
@@ -149,10 +163,12 @@ public class CreateDwcA {
         def taxonVersionRankLookup = CreateDwcA.taxonVersionRankLookup(baseDir)
         def taxonVersionLookup = CreateDwcA.taxonVersionLookup(baseDir)
         def scientificNameLookup = CreateDwcA.readScientificNames(baseDir)
-        def nameserverLookup = CreateDwcA.readNameServer(baseDir)
-        def recommendedKeys = nameserverLookup.values().toSet()
+        //def nameserverLookup = CreateDwcA.readNameServer(baseDir)
+        //def recommendedKeys = nameserverLookup.values().toSet()
         def nnssTaxonListItemLookup = CreateDwcA.readTaxonListItems(baseDir, nnssTaxonListVersionKey)
         def taxonDesignationLookup = CreateDwcA.readTaxonDesignations(baseDir)
+        def synonymLookup = CreateDwcA.readNameserverSynonyms(baseDir)
+        def nameWithRecordLookup = CreateDwcA.readNamesWithRecords(baseDir)
 
         //required column headers - taxonID, datasetID, acceptedNameUsageID, parentNameUsageID, taxonomicStatus, taxonRank, scientificName, scientificNameAuthorship
 
@@ -183,83 +199,111 @@ public class CreateDwcA {
             def terrestrial = line[8] == "Y"
             def marine = line[7] == "Y"
             def freshwater = line[9] == "Y"
-            def redundant = line[10]
+            def redundant = line[10] == "Y"
             def deletedDate = line[19] //straight duplicate
+            def establishmentMeans = ""
 
-            def ignore = deletedDate || redundant == "Y"
-
-            if(!ignore){
+            if(!deletedDate){
 
                 def taxonVersionKey = line[2]
-                def taxonVersionRank = taxonVersionRankLookup.get(taxonVersionKey)
-                if(!taxonVersionRank){
-                    println("Unable to get rank for version key: " + taxonVersionKey)
+
+                if(redundant){
+                    def hasRecords = nameWithRecordLookup.get(taxonVersionKey)
+                    redundant = !hasRecords
+
+                    if(!redundant){
+                        if(redundantNonNativeWithRecords.grep(taxonVersionKey)) {
+                            establishmentMeans = "Non-native"
+                        }
+                    }
                 }
 
+                if(!redundant){
+                    def taxonVersionRank = taxonVersionRankLookup.get(taxonVersionKey)
+                    if (!taxonVersionRank) {
+                        println("Unable to get rank for version key: " + taxonVersionKey)
+                    }
 
-                def taxonKey = taxonVersionLookup.get(taxonVersionKey)
-                def nameLookup = scientificNameLookup.get(taxonKey)
+                    def taxonKey = taxonVersionLookup.get(taxonVersionKey)
+                    def nameLookup = scientificNameLookup.get(taxonKey)
 
-                def nnssDesignationLookup = nnssTaxonListItemLookup.get(taxonVersionKey)
+                    taxonVersionKeys << taxonVersionKey
 
-                taxonVersionKeys <<  taxonVersionKey
+                    if (nameLookup) {
+                        def taxonConceptID = line[0]    //ORGANISM_KEY
+                        def taxonID = line[2]           //TAXON_VERSION_KEY
+                        def parentNameUsageID = organismTaxonVersionKeyMap.get(line[1]) //PARENT_TVK
+                        def acceptedNameUsageID = ""    //blank if not a synonym
+                        def datasetID = "" //taxonListVersionKey
+                        def scientificName = nameLookup["scientificName"]
+                        def scientificNameAuthorship = nameLookup["scientificNameAuthorship"]
+                        def taxonRank = taxonVersionRank["taxonRank"]
+                        def taxonomicStatus = "accepted"
+                        def taxonGroup = taxonGroupMap.get(taxonID) // this needs to be changed to get the
+                        def establishmentStatus = ""
 
-                if(nameLookup) {
-                    def taxonConceptID = line[0]    //ORGANISM_KEY
-                    def taxonID = line[2]           //TAXON_VERSION_KEY
-                    def parentNameUsageID = organismTaxonVersionKeyMap.get(line[1]) //PARENT_TVK
-                    def acceptedNameUsageID = ""    //blank if not a synonym
-                    def datasetID = "" //taxonListVersionKey
-                    def scientificName = nameLookup["scientificName"]
-                    def scientificNameAuthorship = nameLookup["scientificNameAuthorship"]
-                    def taxonRank = taxonVersionRank["taxonRank"]
-                    def taxonomicStatus = "accepted"
-                    def taxonGroup = taxonGroupMap.get(taxonID) // this needs to be changed to get the
-                    def establishmentMeans = ""
-                    def establishmentStatus = ""
+                        if(establishmentMeans == "") {
+                            def nnssDesignationLookup = nnssTaxonListItemLookup.get(taxonVersionKey)
+                            if (!nnssDesignationLookup) {
+                                def nnss = false
 
-                    if(nnssDesignationLookup){
-                        establishmentMeans = "Non-native"
-                        // get designation by taxon list item key
-                        def designation = taxonDesignationLookup.get(nnssDesignationLookup)
-                        if(designation) {
-                            establishmentStatus = designationTypeMap.get(designation)
+                                def synonymKeys = []
+                                synonymLookup.findAll { it.value == taxonVersionKey }.each { synonymKeys << it?.key }
+
+                                synonymKeys.each { synonym ->
+                                    if (!nnss) {
+                                        nnss = nnssTaxonListItemLookup.get(synonym)
+                                    }
+                                }
+                                if (nnss) {
+                                    nnssDesignationLookup = nnss
+                                }
+                            }
+
+                            if (nnssDesignationLookup) {
+                                establishmentMeans = "Non-native"
+                                // get designation by taxon list item key
+                                def designation = taxonDesignationLookup.get(nnssDesignationLookup)
+                                if (designation) {
+                                    establishmentStatus = designationTypeMap.get(designation)
+                                }
+                            } else {
+                                establishmentMeans = "Native"
+                            }
                         }
-                    }
-                    else{
-                        establishmentMeans = "Native"
-                    }
-                    def habitat = ""
-                    if(marine){
-                        speciesProfile.writeNext([taxonID, "marine"] as String[])
-                        habitat = "marine"
-                    }
 
-                    if(terrestrial){
-                        speciesProfile.writeNext([taxonID, "terrestrial"] as String[])
-                        if(habitat !="") {
-                            habitat = habitat + "/terrestrial"
-                        }else{
-                            habitat = "terrestrial"
+                        def habitat = ""
+                        if (marine) {
+                            speciesProfile.writeNext([taxonID, "marine"] as String[])
+                            habitat = "marine"
                         }
-                    }
 
-                    if(freshwater){
-                        speciesProfile.writeNext([taxonID, "freshwater"] as String[])
-                        if(habitat !="") {
-                            habitat = habitat + "/freshwater"
-                        }else{
-                            habitat = "freshwater"
+                        if (terrestrial) {
+                            speciesProfile.writeNext([taxonID, "terrestrial"] as String[])
+                            if (habitat != "") {
+                                habitat = habitat + "/terrestrial"
+                            } else {
+                                habitat = "terrestrial"
+                            }
                         }
+
+                        if (freshwater) {
+                            speciesProfile.writeNext([taxonID, "freshwater"] as String[])
+                            if (habitat != "") {
+                                habitat = habitat + "/freshwater"
+                            } else {
+                                habitat = "freshwater"
+                            }
+                        }
+
+                        // taxaWriter
+                        String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus, establishmentMeans, taxonGroup, establishmentStatus, habitat]
+                        taxaWriter.writeNext(taxon)
+
+
+                    } else {
+                        println("name lookup fails for " + taxonVersionKey)
                     }
-
-                    // taxaWriter
-                    String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus, establishmentMeans, taxonGroup, establishmentStatus, habitat]
-                    taxaWriter.writeNext(taxon)
-
-
-                } else {
-                    println("name lookup fails for " + taxonVersionKey)
                 }
             }
         }
@@ -480,7 +524,7 @@ public class CreateDwcA {
                 def deletedDate = line[15]
                 def versionTo = line[3]
 
-                if(!deletedDate & !versionTo) {
+                if(!deletedDate && !versionTo) {
                     def taxonVersionKey = line[1]
                     def taxonListItemKey = line[0]
                     taxonListItemLookup.put(taxonVersionKey, taxonListItemKey)
@@ -491,4 +535,43 @@ public class CreateDwcA {
         taxonListItemLookup
     }
 
+    /**
+     * Returns synonyms
+     * @return
+     */
+    static def readNameserverSynonyms(baseDir){
+
+        def csvReader = new CSVReader(new FileReader(baseDir + "NAMESERVER.csv"))
+        csvReader.readNext()  //ignore header
+        def synonymLookup = [:]
+        def line = null
+        while((line =  csvReader.readNext()) != null){
+            def isSynonym = line[4] == "S"
+            def deleteDate = line[10]
+
+            if(!deleteDate && isSynonym) {
+                synonymLookup.put(line[1], line[5])
+            }
+        }
+        csvReader.close()
+        synonymLookup
+    }
+
+    /**
+     * Returns taxa with records in the NBN Atlas
+     * @return
+     */
+    static def readNamesWithRecords(baseDir){
+
+        def csvReader = new CSVReader(new FileReader(baseDir + "NBNA_taxa_with_records.csv"))
+        csvReader.readNext()  //ignore header
+        def nameWithRecordLookup = [:]
+        def line = null
+        while((line =  csvReader.readNext()) != null){
+
+            nameWithRecordLookup.put(line[0], line[1])
+        }
+        csvReader.close()
+        nameWithRecordLookup
+    }
 }
