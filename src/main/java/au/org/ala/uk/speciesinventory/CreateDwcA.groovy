@@ -181,7 +181,7 @@ public class CreateDwcA {
         def orgMasterReader = new CSVReader(new FileReader(baseDir + "ORGANISM_MASTER.csv"))
 
         def taxaWriter = new CSVWriter(new FileWriter(new File("data/uk/dwca/taxa.csv")))
-        taxaWriter.writeNext(["taxonID", "parentNameUsageID", "acceptedNameUsageID", "datasetID", "scientificName", "scientificNameAuthorship", "taxonRank", "taxonConceptID", "taxonomicStatus", "establishmentMeans", "taxonGroup", "establishmentStatus", "habitat"] as String[])
+        taxaWriter.writeNext(["taxonID", "parentNameUsageID", "acceptedNameUsageID", "datasetID", "scientificName", "scientificNameAuthorship", "taxonRank", "taxonConceptID", "taxonomicStatus", "establishmentMeans", "taxonGroup", "establishmentStatus", "habitat", "taxonNameAttribute"] as String[])
 
         def commonNameWriter = new CSVWriter(new FileWriter(new File("data/uk/dwca/vernacular.csv")))
         commonNameWriter.writeNext(["taxonID", "nameID", "datasetID", "vernacularName", "language", "status"] as String[])
@@ -241,6 +241,7 @@ public class CreateDwcA {
                         def taxonomicStatus = "accepted"
                         def taxonGroup = taxonGroupMap.get(taxonID) // this needs to be changed to get the
                         def establishmentStatus = ""
+                        def taxonAttribute = taxonVersionRank["taxonVersionAttribute"]
 
                         if(establishmentMeans == "") {
                             def nnssDesignationLookup = nnssTaxonListItemLookup.get(taxonVersionKey)
@@ -297,7 +298,7 @@ public class CreateDwcA {
                         }
 
                         // taxaWriter
-                        String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus, establishmentMeans, taxonGroup, establishmentStatus, habitat]
+                        String[] taxon = [taxonID, parentNameUsageID, acceptedNameUsageID, datasetID, scientificName, scientificNameAuthorship, taxonRank, taxonConceptID, taxonomicStatus, establishmentMeans, taxonGroup, establishmentStatus, habitat, taxonAttribute]
                         taxaWriter.writeNext(taxon)
 
 
@@ -483,7 +484,8 @@ public class CreateDwcA {
         while((line =  csvReader.readNext()) != null){
             def taxonVersionKey = line[0]
             def taxonRankKey = line[12]
-            taxonVersionKeyRankLookup.put(taxonVersionKey, [taxonVersionKey: taxonVersionKey, taxonRank: taxonRankLookup.get(taxonRankKey)])
+            def taxonAttribute = line[2]
+            taxonVersionKeyRankLookup.put(taxonVersionKey, [taxonVersionKey: taxonVersionKey, taxonRank: taxonRankLookup.get(taxonRankKey), taxonVersionAttribute: taxonAttribute])
         }
 
         println("List items: " + taxonVersionKeyRankLookup.size())
